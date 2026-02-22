@@ -1,6 +1,11 @@
 # duplicate_finder
 
-A zero-dependency Python CLI tool that recursively scans a directory for duplicate files, moves them to a designated folder, and writes a plain-text report.
+Recursively scans a directory for duplicate files, moves them to a designated folder, and writes a plain-text report.
+
+Available as:
+- **`duplicate_finder.py`** — Python 3.10+, cross-platform (macOS / Linux / Windows)
+- **`duplicate_finder.ps1`** — PowerShell 5.1+, Windows only, no Python required
+- **`duplicate_finder.bat`** — thin Command Prompt launcher for the PowerShell script
 
 ## What counts as a duplicate?
 
@@ -8,10 +13,15 @@ A file is a **duplicate** if another file with the **same extension** (e.g. `.pd
 
 ## Requirements
 
-- Python 3.10 or newer (uses `match`-free walrus operator and `str | None` union syntax)
-- No third-party packages required
+| Script | Requirement |
+|---|---|
+| `duplicate_finder.py` | Python 3.10 or newer — no third-party packages |
+| `duplicate_finder.ps1` | PowerShell 5.1 or newer (built into Windows 10/11) — no Python |
+| `duplicate_finder.bat` | Any Windows Command Prompt — delegates to the `.ps1` |
 
-## Usage
+---
+
+## Python usage (macOS / Linux / Windows)
 
 ```
 python duplicate_finder.py <source_dir> [options]
@@ -54,6 +64,70 @@ python duplicate_finder.py ~/Documents --output-dir ~/dupes --filter-ext .pdf .d
 
 # Dry-run scoped to images only
 python duplicate_finder.py ~/Photos --output-dir ~/dupes --filter-ext .jpg .png --dry-run
+```
+
+---
+
+## PowerShell usage (Windows — no Python required)
+
+```
+.\duplicate_finder.ps1 <SourceDir> [options]
+```
+
+If script execution is blocked, run once from an elevated PowerShell prompt:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Or use the `.bat` launcher which bypasses the policy automatically:
+```
+duplicate_finder.bat <SourceDir> [options]
+```
+
+### Parameters
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `SourceDir` | yes | — | Directory to scan recursively |
+| `-OutputDir` | no | `.\duplicates` | Where duplicates are moved; report is also written here |
+| `-HashAlgo` | no | `SHA256` | Hash algorithm: `MD5`, `SHA1`, or `SHA256` |
+| `-DryRun` | no | off | Preview actions without moving any files |
+| `-PreviewFile` | no | off | Write a preview report file when using `-DryRun`; has no effect without `-DryRun` |
+| `-FilterExt` | no | all files | Only scan files with the given extension(s); leading dot is optional |
+
+### Examples
+
+```powershell
+# Basic scan — move duplicates to .\duplicates\
+.\duplicate_finder.ps1 C:\Downloads
+
+# Custom output folder
+.\duplicate_finder.ps1 C:\Documents -OutputDir C:\Desktop\Dupes
+
+# Preview only (nothing is moved, preview printed to console)
+.\duplicate_finder.ps1 C:\Downloads -OutputDir C:\Dupes -DryRun
+
+# Preview and also save a preview report file
+.\duplicate_finder.ps1 C:\Downloads -OutputDir C:\Dupes -DryRun -PreviewFile
+
+# Faster scan with MD5
+.\duplicate_finder.ps1 C:\Photos -OutputDir C:\Dupes -HashAlgo MD5
+
+# Only look for duplicate PDFs
+.\duplicate_finder.ps1 C:\Documents -OutputDir C:\Dupes -FilterExt .pdf
+
+# Only look for duplicate PDFs and Word documents
+.\duplicate_finder.ps1 C:\Documents -OutputDir C:\Dupes -FilterExt .pdf .doc .docx
+
+# Dry-run scoped to images only
+.\duplicate_finder.ps1 C:\Photos -OutputDir C:\Dupes -FilterExt .jpg .png -DryRun
+```
+
+Same examples via the `.bat` launcher from Command Prompt:
+```
+duplicate_finder.bat C:\Downloads
+duplicate_finder.bat C:\Downloads -OutputDir C:\Dupes -DryRun -PreviewFile
+duplicate_finder.bat C:\Downloads -FilterExt .pdf .doc -DryRun
 ```
 
 ## Output
