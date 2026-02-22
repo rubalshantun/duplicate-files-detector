@@ -4,6 +4,7 @@ Recursively scans a directory for duplicate files, moves them to a designated fo
 
 Available as:
 - **`duplicate_finder.py`** — Python 3.10+, cross-platform (macOS / Linux / Windows)
+- **`duplicate_finder.sh`** — Bash 4.2+, Linux / Unix, no Python required
 - **`duplicate_finder.ps1`** — PowerShell 5.1+, Windows only, no Python required
 - **`duplicate_finder.bat`** — thin Command Prompt launcher for the PowerShell script
 
@@ -16,6 +17,7 @@ A file is a **duplicate** if another file with the **same extension** (e.g. `.pd
 | Script | Requirement |
 |---|---|
 | `duplicate_finder.py` | Python 3.10 or newer — no third-party packages |
+| `duplicate_finder.sh` | Bash 4.2 or newer + standard coreutils (`find`, `sha256sum`/`md5sum`) — no Python |
 | `duplicate_finder.ps1` | PowerShell 5.1 or newer (built into Windows 10/11) — no Python |
 | `duplicate_finder.bat` | Any Windows Command Prompt — delegates to the `.ps1` |
 
@@ -64,6 +66,60 @@ python duplicate_finder.py ~/Documents --output-dir ~/dupes --filter-ext .pdf .d
 
 # Dry-run scoped to images only
 python duplicate_finder.py ~/Photos --output-dir ~/dupes --filter-ext .jpg .png --dry-run
+```
+
+---
+
+## Bash usage (Linux / Unix — no Python required)
+
+```
+bash duplicate_finder.sh <source_dir> [options]
+```
+
+Bash 4.2+ is the default on all major Linux distributions (Ubuntu, Debian, Fedora, RHEL, Arch).
+On macOS the system bash is 3.2; install a newer version with `brew install bash` and invoke with
+the full path: `/usr/local/bin/bash duplicate_finder.sh ...`
+
+### Options
+
+| Option | Required | Default | Description |
+|---|---|---|---|
+| `source_dir` | yes | — | Directory to scan recursively |
+| `--output-dir DIR` | no | `./duplicates` | Where duplicates are moved; report is also written here |
+| `--hash-algo ALGO` | no | `sha256` | Hash algorithm: `md5`, `sha1`, or `sha256` |
+| `--dry-run` | no | off | Preview actions without moving any files |
+| `--preview-file` | no | off | Write a preview report file when using `--dry-run`; has no effect without `--dry-run` |
+| `--filter-ext EXT [EXT ...]` | no | all files | Only scan files with the given extension(s); leading dot is optional |
+
+### Examples
+
+```bash
+# Make executable (once)
+chmod +x duplicate_finder.sh
+
+# Basic scan — move duplicates to ./duplicates/
+./duplicate_finder.sh ~/Downloads
+
+# Custom output folder
+./duplicate_finder.sh ~/Documents --output-dir ~/Desktop/dupes
+
+# Preview only (nothing is moved, preview printed to stdout)
+./duplicate_finder.sh ~/Downloads --output-dir ~/dupes --dry-run
+
+# Preview and also save a preview report file
+./duplicate_finder.sh ~/Downloads --output-dir ~/dupes --dry-run --preview-file
+
+# Faster scan with MD5
+./duplicate_finder.sh /data/photos --output-dir /data/dupes --hash-algo md5
+
+# Only look for duplicate PDFs
+./duplicate_finder.sh ~/Documents --output-dir ~/dupes --filter-ext .pdf
+
+# Only look for duplicate PDFs and Word documents
+./duplicate_finder.sh ~/Documents --output-dir ~/dupes --filter-ext .pdf .doc .docx
+
+# Dry-run scoped to images only
+./duplicate_finder.sh ~/Photos --output-dir ~/dupes --filter-ext .jpg .png --dry-run
 ```
 
 ---
