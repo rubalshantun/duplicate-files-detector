@@ -25,6 +25,7 @@ python duplicate_finder.py <source_dir> [options]
 | `--output-dir DIR` | no | `./duplicates` | Where duplicates are moved; report is also written here |
 | `--hash-algo ALGO` | no | `sha256` | Hash algorithm: `md5`, `sha1`, or `sha256` |
 | `--dry-run` | no | off | Preview actions without moving any files |
+| `--preview-file` | no | off | Write a preview report file when using `--dry-run` (named `duplicates_report_preview_<timestamp>.txt`); has no effect without `--dry-run` |
 | `--filter-ext EXT [EXT ...]` | no | all files | Only scan files with the given extension(s); leading dot is optional |
 
 ### Examples
@@ -36,8 +37,11 @@ python duplicate_finder.py ~/Downloads
 # Custom output folder
 python duplicate_finder.py ~/Documents --output-dir ~/Desktop/dupes
 
-# Preview only (nothing is moved)
+# Preview only (nothing is moved, preview printed to stdout)
 python duplicate_finder.py ~/Downloads --output-dir ~/dupes --dry-run
+
+# Preview and also save a preview report file
+python duplicate_finder.py ~/Downloads --output-dir ~/dupes --dry-run --preview-file
 
 # Faster scan with MD5 (less collision-resistant, fine for most use cases)
 python duplicate_finder.py /data/photos --output-dir /data/dupes --hash-algo md5
@@ -64,10 +68,17 @@ ORIGINAL: /Users/alice/Documents/invoices/invoice.pdf  |  DUPLICATE: /Users/alic
 ORIGINAL: /Users/alice/Work/notes.docx  |  DUPLICATE: /Users/alice/backup/notes.docx
 ```
 
-When `--dry-run` is used, the report is printed to stdout instead of written to disk:
+When `--dry-run` is used, the preview is printed to stdout:
 
 ```
-[DRY-RUN] Report would be written to: /Users/alice/dupes/duplicates_report.txt
+--- Report preview ---
+ORIGINAL: /Users/alice/Documents/invoice.pdf  |  DUPLICATE: /Users/alice/Downloads/invoice.pdf
+```
+
+Add `--preview-file` to also save the preview to disk:
+
+```
+[DRY-RUN] Preview report written to: /Users/alice/dupes/duplicates_report_preview_2026_02_22_12_00_00.txt
 
 --- Report preview ---
 ORIGINAL: /Users/alice/Documents/invoice.pdf  |  DUPLICATE: /Users/alice/Downloads/invoice.pdf
