@@ -8,6 +8,7 @@ and the same content hash has already been seen during the scan.
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import shutil
 import sys
@@ -51,12 +52,16 @@ def find_and_move_duplicates(
     algorithm: str,
     dry_run: bool,
     filter_exts: set[str] | None = None,
+    timestamp: str = "",
+    preview_file: bool = False,
 ) -> tuple[int, int]:
     """
     Scan source_dir recursively for duplicates.
 
-    filter_exts: if provided, only files whose lowercased extension is in this
-                 set are considered (e.g. {'.pdf', '.doc'}).
+    filter_exts:  if provided, only files whose lowercased extension is in this
+                  set are considered (e.g. {'.pdf', '.doc'}).
+    preview_file: when True and dry_run is True, write a preview report file to
+                  output_dir in addition to printing the preview to stdout.
 
     Returns (total_scanned, total_duplicates).
     """
@@ -115,17 +120,21 @@ def find_and_move_duplicates(
 
     # Write report
     if report:
-        report_path = output_dir_resolved / "duplicates_report.txt"
         report_lines = [
             f"ORIGINAL: {orig}  |  DUPLICATE: {', '.join(str(d) for d in dups)}"
             for orig, dups in report.items()
         ]
         if dry_run:
-            print("[DRY-RUN] Report would be written to:", report_path)
+            if preview_file:
+                report_path = output_dir_resolved / f"duplicates_report_preview_{timestamp}.txt"
+                output_dir_resolved.mkdir(parents=True, exist_ok=True)
+                report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+                print(f"[DRY-RUN] Preview report written to: {report_path}")
             print("\n--- Report preview ---")
             for line in report_lines:
                 print(line)
         else:
+            report_path = output_dir_resolved / f"duplicates_report_{timestamp}.txt"
             output_dir_resolved.mkdir(parents=True, exist_ok=True)
             report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
             print(f"\nReport written: {report_path}")
@@ -180,6 +189,11 @@ Examples:
         default=None,
         help="Only scan files with these extensions, e.g. --filter-ext .pdf .doc .txt",
     )
+    parser.add_argument(
+        "--preview-file",
+        action="store_true",
+        help="Write a preview report file when using --dry-run (named duplicates_report_preview_<timestamp>.txt)",
+    )
     args = parser.parse_args()
 
     source_dir: Path = args.source_dir.expanduser().resolve()
@@ -192,8 +206,11 @@ Examples:
     if args.filter_ext:
         filter_exts = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in args.filter_ext}
 
+    timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
     scanned, duplicates = find_and_move_duplicates(
-        source_dir, output_dir, args.hash_algo, args.dry_run, filter_exts
+        source_dir, output_dir, args.hash_algo, args.dry_run, filter_exts, timestamp,
+        args.preview_file,
     )
 
     print("\n" + "=" * 50)

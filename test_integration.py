@@ -7,6 +7,7 @@ subprocess, verifies stdout / filesystem state, then cleans up.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -56,10 +57,7 @@ def test_dry_run_no_files_moved() -> None:
 
         assert result.returncode == 0, result.stderr
 
-        # Output dir must NOT be created during dry-run
-        assert not out.exists(), "dry-run must not create the output directory"
-
-        # Original files must all still be present
+        # Original files must all still be present (nothing moved)
         assert (src / "a.txt").exists()
         assert (src / "sub" / "b.txt").exists()
         assert (src / "c.txt").exists()
@@ -69,7 +67,10 @@ def test_dry_run_no_files_moved() -> None:
         assert str((src / "sub" / "b.txt").resolve()) in result.stdout
         assert str((src / "a.txt").resolve()) in result.stdout
 
-        # Report preview section must appear
+        # Without --preview-file, output dir must NOT be created
+        assert not out.exists(), "dry-run without --preview-file must not create the output directory"
+
+        # Report preview section must still appear in stdout
         assert "--- Report preview ---" in result.stdout
         assert "ORIGINAL:" in result.stdout
         assert "DUPLICATE:" in result.stdout
@@ -96,6 +97,9 @@ def test_dry_run_report_format() -> None:
         result = run([str(src), "--output-dir", str(out), "--dry-run"])
 
         assert result.returncode == 0, result.stderr
+
+        # Without --preview-file, no file should be written
+        assert not out.exists(), "output dir should not be created without --preview-file"
 
         # Find the report lines (after "--- Report preview ---")
         preview_start = result.stdout.index("--- Report preview ---")
@@ -157,10 +161,14 @@ def test_actual_move() -> None:
         assert len(moved_files) == 1, f"Expected 1 moved file, got {moved_files}"
         assert moved_files[0].read_bytes() == b"image bytes", "moved file content mismatch"
 
-        # report file must exist with correct format
-        report = out / "duplicates_report.txt"
-        assert report.exists(), "report file missing"
-        lines = report.read_text().splitlines()
+        # report file must exist with timestamped name and correct format
+        report_files = list(out.glob("duplicates_report_*.txt"))
+        # exclude preview files (shouldn't exist in non-dry-run, but be safe)
+        report_files = [f for f in report_files if "_preview_" not in f.name]
+        assert len(report_files) == 1, f"Expected 1 report file, got {report_files}"
+        assert re.match(r"duplicates_report_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}\.txt",
+                        report_files[0].name), f"Unexpected filename: {report_files[0].name}"
+        lines = report_files[0].read_text().splitlines()
         assert len(lines) == 1, f"Expected 1 report line, got {lines}"
         assert lines[0].startswith("ORIGINAL:"), f"bad report format: {lines[0]}"
         assert "  |  DUPLICATE:" in lines[0], f"missing DUPLICATE section: {lines[0]}"
@@ -479,12 +487,83 @@ def test_filter_ext_actual_move() -> None:
         assert (src / "a_orig.txt").exists(), ".txt file should not have been moved"
         assert (src / "b_copy.txt").exists(), ".txt file should not have been moved"
 
-        # Only one file in output dir
+        # Only one non-report file in output dir
         moved = list(out.glob("*"))
-        non_report = [f for f in moved if f.name != "duplicates_report.txt"]
+        non_report = [f for f in moved if not f.name.startswith("duplicates_report_")]
         assert len(non_report) == 1, f"Expected 1 moved file, got {non_report}"
 
         print("PASS test_filter_ext_actual_move")
+
+
+# ---------------------------------------------------------------------------
+# Test 16: --preview-file writes the file; without it, no file is created
+# ---------------------------------------------------------------------------
+
+def test_preview_file_flag_writes_file() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "src"
+        out = Path(tmp) / "out"
+
+        make_tree(src, {
+            "a.txt": b"hello",
+            "b.txt": b"hello",
+        })
+
+        result = run([str(src), "--output-dir", str(out), "--dry-run", "--preview-file"])
+
+        assert result.returncode == 0, result.stderr
+
+        # Output dir must be created and contain the preview file
+        preview_files = list(out.glob("duplicates_report_preview_*.txt"))
+        assert len(preview_files) == 1, f"Expected 1 preview file, got {preview_files}"
+        assert re.match(
+            r"duplicates_report_preview_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}\.txt",
+            preview_files[0].name,
+        ), f"Unexpected filename: {preview_files[0].name}"
+
+        # File content must match the stdout preview
+        file_lines = preview_files[0].read_text().splitlines()
+        assert len(file_lines) == 1, f"Expected 1 report line, got {file_lines}"
+        assert file_lines[0].startswith("ORIGINAL:"), f"Bad format: {file_lines[0]}"
+        assert "  |  DUPLICATE:" in file_lines[0], f"Missing DUPLICATE: {file_lines[0]}"
+
+        # stdout must still contain the preview section
+        assert "--- Report preview ---" in result.stdout
+        assert "[DRY-RUN] Preview report written to:" in result.stdout
+
+        # No source files must have been moved
+        assert (src / "a.txt").exists()
+        assert (src / "b.txt").exists()
+
+        print("PASS test_preview_file_flag_writes_file")
+
+
+def test_preview_file_without_dry_run_has_no_effect() -> None:
+    """--preview-file is silently ignored when --dry-run is not set."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "src"
+        out = Path(tmp) / "out"
+
+        make_tree(src, {
+            "a_orig.txt": b"data",
+            "b_copy.txt": b"data",
+        })
+
+        result = run([str(src), "--output-dir", str(out), "--preview-file"])
+
+        assert result.returncode == 0, result.stderr
+
+        # Normal run: duplicate must be moved
+        assert not (src / "b_copy.txt").exists(), "duplicate was not moved"
+
+        # A normal timestamped report must exist, not a preview file
+        report_files = list(out.glob("duplicates_report_*.txt"))
+        preview_files = [f for f in report_files if "_preview_" in f.name]
+        normal_files  = [f for f in report_files if "_preview_" not in f.name]
+        assert len(preview_files) == 0, f"Unexpected preview file in non-dry-run: {preview_files}"
+        assert len(normal_files)  == 1, f"Expected 1 normal report, got {normal_files}"
+
+        print("PASS test_preview_file_without_dry_run_has_no_effect")
 
 
 # ---------------------------------------------------------------------------
@@ -508,6 +587,8 @@ TESTS = [
     test_filter_ext_multiple_extensions,
     test_filter_ext_no_matching_files,
     test_filter_ext_actual_move,
+    test_preview_file_flag_writes_file,
+    test_preview_file_without_dry_run_has_no_effect,
 ]
 
 
